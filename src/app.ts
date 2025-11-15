@@ -19,17 +19,14 @@ app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/games', gameRoutes);
 
-// Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// 404 handler
 app.use((req, res) => {
     res.status(404).json({ error: 'Route not found' });
 });
 
-// Error handler
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     console.error('Unhandled error:', err);
     res.status(500).json({ error: 'Internal server error' });

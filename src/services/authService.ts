@@ -2,7 +2,6 @@ import { PrismaClient } from '@prisma/client';
 import admin from '../config/firebase.js';
 import { getAuth, UserRecord } from 'firebase-admin/auth';
 
-// Get auth instance from initialized admin (use default app)
 const auth = getAuth();
 
 export class AuthService {
@@ -12,12 +11,9 @@ export class AuthService {
         this.prisma = new PrismaClient();
     }
 
-    // Cleanup method for graceful shutdown
     async disconnect(): Promise<void> {
         await this.prisma.$disconnect();
     }
-
-    // TOKEN MANAGEMENT
 
     async generateToken(userId: string, customClaims?: object): Promise<string> {
         try {
@@ -46,26 +42,21 @@ export class AuthService {
         }
     }
 
-    // USER MANAGEMENT
-
     async createUser(email: string, password: string): Promise<any> {
         try {
-            // Create Firebase user
             const firebaseUser = await auth.createUser({
                 email,
                 password,
             });
 
-            // Hash password for local storage
             const bcrypt = await import('bcrypt');
             const passwordHashed = await bcrypt.hash(password, 10);
 
-            // Create user in database
             const user = await this.prisma.user.create({
                 data: {
                     id: String(firebaseUser.uid),
                     email: firebaseUser.email || '',
-                    username: email.split('@')[0], // Generate username from email
+                    username: email.split('@')[0],
                     passwordHashed,
                 },
             });
@@ -77,13 +68,10 @@ export class AuthService {
 
     async getOrCreateUser(userRecord: UserRecord, password?: string): Promise<any> {
         try {
-            // Ensure uid is a string and explicitly type it
             const userId: string = String(userRecord.uid).trim();
 
-            // Debug: log the type and value
             console.log('Looking up user with id:', userId, 'Type:', typeof userId, 'Length:', userId.length);
 
-            // Try findFirst instead of findUnique to avoid potential caching issues
             let user = await this.prisma.user.findFirst({
                 where: {
                     id: userId

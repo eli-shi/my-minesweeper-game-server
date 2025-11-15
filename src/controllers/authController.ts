@@ -36,8 +36,6 @@ export class AuthController {
             const userRecord = await this.authService.verifyToken(idToken);
             const user = await this.authService.getOrCreateUser(userRecord);
 
-            // Return user data - frontend should use the Firebase ID token directly for authenticated requests
-            // No need for custom tokens - the ID token is what the middleware verifies
             res.json({ user });
         } catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : 'Login failed' });
@@ -59,7 +57,6 @@ export class AuthController {
                 }
             }
 
-            // Always return success so the frontend can clear local state even if token was invalid/expired
             res.json({ message: 'Successfully logged out' });
         } catch (error) {
             console.error('Logout error (returning success anyway):', error);
@@ -92,7 +89,6 @@ export class AuthController {
                 return;
             }
 
-            // TODO: Implement password reset email sending
             res.json({ message: 'Password reset email sent (not implemented yet)' });
         } catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : 'Password reset request failed' });
@@ -101,7 +97,6 @@ export class AuthController {
 
     passwordReset = async (req: Request, res: Response): Promise<void> => {
         try {
-            // TODO: Implement password reset with token validation
             res.json({ message: 'Password reset (not implemented yet)' });
         } catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : 'Password reset failed' });
@@ -117,12 +112,9 @@ export class AuthController {
                 return;
             }
 
-            // Verify the token and get/create user to ensure they exist in database
             const userRecord = await this.authService.verifyToken(idToken);
             await this.authService.getOrCreateUser(userRecord);
 
-            // Just return success - frontend should use the Firebase ID token directly
-            // The ID token itself is what gets refreshed by Firebase SDK
             res.json({ message: 'Token verified' });
         } catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : 'Token refresh failed' });

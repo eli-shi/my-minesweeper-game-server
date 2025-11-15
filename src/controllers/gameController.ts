@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { GameService } from '../services/gameService.js';
 import { DIFFICULTY_CONFIGS } from '../config/gameConfig.js';
+import { gameSchemas } from '../validation/zodSchemas.js';
 
 export class GameController {
     private gameService: GameService;
@@ -19,12 +20,8 @@ export class GameController {
 
     createGame = async (req: Request, res: Response): Promise<void> => {
         try {
-            const { difficulty, firstClickRow, firstClickCol } = req.body;
-
-            if (!difficulty || firstClickRow === undefined || firstClickCol === undefined) {
-                res.status(400).json({ error: 'Difficulty, firstClickRow, and firstClickCol are required' });
-                return;
-            }
+            const validatedData = gameSchemas.createBody.parse(req.body);
+            const { difficulty, firstClickRow, firstClickCol } = validatedData;
 
             const config = DIFFICULTY_CONFIGS[difficulty.toLowerCase()];
             if (!config) {
@@ -65,18 +62,9 @@ export class GameController {
 
     revealCell = async (req: Request, res: Response): Promise<void> => {
         try {
-            const userId = req.user?.uid;
-            if (!userId) {
-                res.status(401).json({ error: 'User not authenticated' });
-                return;
-            }
-
-            const { board, revealed, flagged, row, col, difficulty } = req.body;
-
-            if (!board || !revealed || !flagged || row === undefined || col === undefined || !difficulty) {
-                res.status(400).json({ error: 'Board, revealed, flagged, row, col, and difficulty are required' });
-                return;
-            }
+            const validatedData = gameSchemas.revealBody.parse(req.body);
+            const { board, revealed, flagged, row, col, difficulty } = validatedData;
+            const userId = req.user?.uid ?? null;
 
             const config = DIFFICULTY_CONFIGS[difficulty.toLowerCase()];
             if (!config) {
@@ -84,7 +72,6 @@ export class GameController {
                 return;
             }
 
-            // Process reveal
             const result = this.gameService.processReveal(
                 board,
                 revealed,
@@ -96,8 +83,7 @@ export class GameController {
                 config.mines
             );
 
-            // If game is over, save to database
-            if (result.gameOver) {
+            if (result.gameOver && userId) {
                 await this.gameService.saveCompletedGame(
                     userId,
                     difficulty,
@@ -118,12 +104,8 @@ export class GameController {
 
     toggleFlag = async (req: Request, res: Response): Promise<void> => {
         try {
-            const { revealed, flagged, row, col, difficulty } = req.body;
-
-            if (!revealed || !flagged || row === undefined || col === undefined || !difficulty) {
-                res.status(400).json({ error: 'Revealed, flagged, row, col, and difficulty are required' });
-                return;
-            }
+            const validatedData = gameSchemas.toggleFlagBody.parse(req.body);
+            const { revealed, flagged, row, col, difficulty } = validatedData;
 
             const config = DIFFICULTY_CONFIGS[difficulty.toLowerCase()];
             if (!config) {
@@ -151,7 +133,7 @@ export class GameController {
                 return;
             }
 
-            const limit = parseInt(req.query.limit as string) || 10;
+            const limit = (req.query.limit as number | undefined) ?? 10;
             const games = await this.gameService.getUserGames(userId, limit);
             res.json(games);
         } catch (error) {

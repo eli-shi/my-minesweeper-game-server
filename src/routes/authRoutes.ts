@@ -1,27 +1,22 @@
 import express from 'express';
 import { verifyToken, optionalAuth } from '../middleware/auth.js';
 import { AuthController } from '../controllers/authController.js';
+import { validateBody } from '../middleware/validation.js';
+import { authSchemas } from '../validation/zodSchemas.js';
 
 const router = express.Router();
 const authController = new AuthController();
 
-// Registration route
-router.post('/register', authController.register);
+router.post('/register', validateBody(authSchemas.registerBody), authController.register);
 
-// Login route
-router.post('/login', authController.login);
+router.post('/login', validateBody(authSchemas.loginBody), authController.login);
 
-// Logout route - optional auth (works even if token is invalid/expired)
 router.post('/logout', optionalAuth, authController.logout);
 
-// Password reset request route
-router.post('/password-reset-request', authController.passwordResetRequest);
+router.post('/password-reset-request', validateBody(authSchemas.passwordResetRequestBody), authController.passwordResetRequest);
 
-// Password reset route
 router.post('/password-reset', authController.passwordReset);
 
-
-// Refresh token route
-router.post('/refresh-token', authController.refreshToken);
+router.post('/refresh-token', validateBody(authSchemas.refreshBody), authController.refreshToken);
 
 export default router;
