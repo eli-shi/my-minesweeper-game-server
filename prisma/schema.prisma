@@ -1,0 +1,107 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id // Firebase UID
+  username        String   @unique
+  email           String   @unique
+  passwordHashed  String
+  updated_at      DateTime @updatedAt
+  created_at      DateTime @default(now())
+  last_game_played DateTime?
+
+  // Relationships
+  games           Game[]
+  easyMode        EasyMode?
+  mediumMode      MediumMode?
+  hardMode        HardMode?
+  followingUsers  Friend[] @relation("FollowingUser")
+  followedByUsers Friend[] @relation("FollowedUser")
+}
+
+model Friend {
+  id               Int      @id @default(autoincrement())
+  following_user_id String
+  followed_user_id  String
+  created_at        DateTime @default(now())
+
+  // Relationships
+  followingUser    User     @relation("FollowingUser", fields: [following_user_id], references: [id])
+  followedUser     User     @relation("FollowedUser", fields: [followed_user_id], references: [id])
+}
+
+model Game {
+  id           Int      @id @default(autoincrement())
+  status       String   // 'won' or 'lost' - only completed games are saved
+  solved_time  DateTime?
+  user_id      String
+  diff_id      Int
+  created_at   DateTime @default(now())
+
+  // Relationships
+  user         User     @relation(fields: [user_id], references: [id])
+  difficulty   Difficulty @relation(fields: [diff_id], references: [diff_id])
+}
+
+model Difficulty {
+  diff_id    Int   @id @default(autoincrement())
+  diff_name  String
+
+  // Relationships
+  games      Game[]      // Only completed games
+  easyModes  EasyMode[]
+  mediumModes MediumMode[]
+  hardModes  HardMode[]
+}
+
+model EasyMode {
+  user_id    String   @id
+  diff_id    Int
+  won        Int
+  played     Int
+  updated_at DateTime @updatedAt
+  created_at DateTime @default(now())
+
+  // Relationships
+  user       User     @relation(fields: [user_id], references: [id])
+  difficulty Difficulty @relation(fields: [diff_id], references: [diff_id])
+}
+
+model MediumMode {
+  user_id    String   @id
+  diff_id    Int
+  won        Int
+  played     Int
+  updated_at DateTime @updatedAt
+  created_at DateTime @default(now())
+
+  // Relationships
+  user       User     @relation(fields: [user_id], references: [id])
+  difficulty Difficulty @relation(fields: [diff_id], references: [diff_id])
+}
+
+model HardMode {
+  user_id    String   @id
+  diff_id    Int
+  won        Int
+  played     Int
+  updated_at DateTime @updatedAt
+  created_at DateTime @default(now())
+
+  // Relationships
+  user       User     @relation(fields: [user_id], references: [id])
+  difficulty Difficulty @relation(fields: [diff_id], references: [diff_id])
+}
+
