@@ -11,11 +11,13 @@ const withValidation =
     (schema: ZodTypeAny, property: 'body' | 'query' | 'params') =>
         (req: Request, res: Response, next: NextFunction) => {
             try {
+                console.log(`Validating ${property}:`, req[property]);
                 const result = schema.parse(req[property]);
                 (req as any)[property] = result;
                 next();
             } catch (error) {
                 if (error instanceof ZodError) {
+                    console.error('Validation error:', formatZodError(error));
                     return res.status(400).json({
                         error: 'Validation failed',
                         details: formatZodError(error),

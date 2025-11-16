@@ -3,6 +3,8 @@ import { GameService } from '../services/gameService.js';
 import { DIFFICULTY_CONFIGS } from '../config/gameConfig.js';
 import { gameSchemas } from '../validation/zodSchemas.js';
 
+const MAX_GAME_DURATION_MS = 5 * 60 * 1000;
+
 export class GameController {
     private gameService: GameService;
 
@@ -54,6 +56,7 @@ export class GameController {
                 revealed: revealed,
                 flagged: flagged,
                 remainingMines: this.gameService.calculateRemainingMines(config.mines, flagged, config.rows, config.cols),
+                startedAt: new Date().toISOString(),
             });
         } catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to create game' });
@@ -63,12 +66,32 @@ export class GameController {
     revealCell = async (req: Request, res: Response): Promise<void> => {
         try {
             const validatedData = gameSchemas.revealBody.parse(req.body);
-            const { board, revealed, flagged, row, col, difficulty } = validatedData;
+            const { board, revealed, flagged, row, col, difficulty, startedAt } = validatedData;
             const userId = req.user?.uid ?? null;
 
             const config = DIFFICULTY_CONFIGS[difficulty.toLowerCase()];
             if (!config) {
                 res.status(400).json({ error: `Invalid difficulty: ${difficulty}` });
+                return;
+            }
+
+            const elapsedMs = Date.now() - startedAt.getTime();
+            if (elapsedMs > MAX_GAME_DURATION_MS) {
+                const finalRevealed = revealed.map(row => row.map(() => true));
+                if (userId) {
+                    await this.gameService.saveCompletedGame(
+                        userId,
+                        difficulty,
+                        'lost',
+                        new Date()
+                    );
+                }
+                res.json({
+                    status: 'lost',
+                    reason: 'time_limit_exceeded',
+                    revealed: finalRevealed,
+                    remainingMines: this.gameService.calculateRemainingMines(config.mines, flagged, config.rows, config.cols),
+                });
                 return;
             }
 
@@ -127,16 +150,24 @@ export class GameController {
 
     getGameHistory = async (req: Request, res: Response): Promise<void> => {
         try {
+            console.log('getGameHistory called, user:', req.user);
+            console.log('query params:', req.query);
+
             const userId = req.user?.uid;
             if (!userId) {
                 res.status(401).json({ error: 'User not authenticated' });
                 return;
             }
 
-            const limit = (req.query.limit as number | undefined) ?? 10;
+            const limitParam = req.query.limit;
+            const limit = limitParam ? parseInt(String(limitParam), 10) : 10;
+
+            console.log('Fetching games for user:', userId, 'with limit:', limit);
             const games = await this.gameService.getUserGames(userId, limit);
+            console.log('Found games:', games.length);
             res.json(games);
         } catch (error) {
+            console.error('Error in getGameHistory:', error);
             res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to get game history' });
         }
     };

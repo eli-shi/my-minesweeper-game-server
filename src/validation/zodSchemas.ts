@@ -12,17 +12,28 @@ const cellSchema = z.object({
 const boardSchema = z.array(z.array(cellSchema));
 const booleanMatrixSchema = z.array(z.array(z.boolean()));
 
+const isoDateSchema = z.preprocess((value) => {
+    if (value instanceof Date) return value;
+    if (typeof value === 'string' || value instanceof String) {
+        const date = new Date(value as string);
+        if (!Number.isNaN(date.getTime())) {
+            return date;
+        }
+    }
+    return value;
+}, z.date());
+
 const coerceNumber = (value: unknown) => {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
         const parsed = Number(value);
-        return Number.isNaN(parsed) ? undefined : parsed;
+        return Number.isNaN(parsed) ? value : parsed;
     }
     if (Array.isArray(value) && value.length > 0) {
         const parsed = Number(value[0]);
-        return Number.isNaN(parsed) ? undefined : parsed;
+        return Number.isNaN(parsed) ? value : parsed;
     }
-    return undefined;
+    return value;
 };
 
 export const authSchemas = {
@@ -54,6 +65,7 @@ export const gameSchemas = {
         flagged: booleanMatrixSchema,
         row: z.number().int().nonnegative(),
         col: z.number().int().nonnegative(),
+        startedAt: isoDateSchema,
     }),
     toggleFlagBody: z.object({
         difficulty: difficultyEnum,

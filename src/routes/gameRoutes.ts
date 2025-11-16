@@ -20,7 +20,7 @@ router.post('/flag', validateBody(gameSchemas.toggleFlagBody), gameController.to
 router.post('/reveal', optionalAuth, validateBody(gameSchemas.revealBody), gameController.revealCell);
 
 // Get game history (requires auth)
-router.get('/history', verifyToken, validateQuery(gameSchemas.historyQuery), gameController.getGameHistory);
+router.get('/history', verifyToken, gameController.getGameHistory);
 
 export default router;
 
