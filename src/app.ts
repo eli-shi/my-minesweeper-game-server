@@ -5,7 +5,14 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import gameRoutes from './routes/gameRoutes.js';
+import leaderboardRoutes from './routes/leaderboardRoutes.js';
 import { corsOptions } from './config/cors.js';
+import {
+    generalLimiter,
+    authLimiter,
+    gameActionLimiter,
+    leaderboardLimiter
+} from './middleware/rateLimiter.js';
 
 dotenv.config();
 
@@ -13,11 +20,12 @@ const app = express();
 
 app.use(cors(corsOptions));
 app.use(helmet());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(generalLimiter);
 
-app.use('/auth', authRoutes);
-app.use('/users', userRoutes);
-app.use('/games', gameRoutes);
+app.use('/auth', authLimiter, authRoutes);
+app.use('/games', gameActionLimiter, gameRoutes);
+app.use('/games/leaderboard', leaderboardLimiter, leaderboardRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

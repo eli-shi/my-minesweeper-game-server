@@ -50,6 +50,10 @@ export const authSchemas = {
     passwordResetRequestBody: z.object({
         email: z.string().email(),
     }),
+    passwordResetBody: z.object({
+        userId: z.string().min(1, 'User ID is required'),
+        newPassword: z.string().min(6, 'Password must be at least 6 characters'),
+    }),
 };
 
 export const gameSchemas = {
@@ -59,18 +63,12 @@ export const gameSchemas = {
         firstClickCol: z.number().int().nonnegative(),
     }),
     revealBody: z.object({
-        difficulty: difficultyEnum,
-        board: boardSchema,
-        revealed: booleanMatrixSchema,
-        flagged: booleanMatrixSchema,
+        gameId: z.string().uuid(),
         row: z.number().int().nonnegative(),
         col: z.number().int().nonnegative(),
-        startedAt: isoDateSchema,
     }),
     toggleFlagBody: z.object({
-        difficulty: difficultyEnum,
-        revealed: booleanMatrixSchema,
-        flagged: booleanMatrixSchema,
+        gameId: z.string().uuid(),
         row: z.number().int().nonnegative(),
         col: z.number().int().nonnegative(),
     }),
