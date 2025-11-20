@@ -3,7 +3,7 @@ import { Cell } from './gameService.js';
 interface CachedGame {
     gameId: string;
     userId: string | null;
-    sessionToken?: string; // For guest games - prevents cross-guest access
+    sessionToken?: string;
     difficulty: string;
     board: Cell[][];
     revealed: boolean[][];

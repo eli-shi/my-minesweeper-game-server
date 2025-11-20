@@ -70,7 +70,6 @@ export class GameController {
                 remainingMines: this.gameService.calculateRemainingMines(config.mines, flagged, config.rows, config.cols),
             };
 
-            // Include sessionToken for guest games
             if (sessionToken) {
                 response.sessionToken = sessionToken;
             }

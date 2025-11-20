@@ -43,7 +43,6 @@ export class GameService {
         const expiresAt = new Date();
         expiresAt.setHours(expiresAt.getHours() + 2);
 
-        // Generate session token for guest games to prevent cross-guest access
         const sessionToken = userId === null ? randomUUID() : undefined;
 
         gameCache.set(gameId, {
@@ -75,16 +74,11 @@ export class GameService {
         const game = gameCache.get(gameId);
         if (!game) return null;
 
-        // Authorization check:
-        // - If game belongs to authenticated user, userId must match
-        // - If game is a guest game (userId is null), require sessionToken to match
         if (game.userId !== null) {
-            // Authenticated user's game - must match userId
             if (game.userId !== userId) {
                 throw new Error('Unauthorized to access this game');
             }
         } else {
-            // Guest game - require sessionToken to prevent cross-guest access
             if (userId !== undefined && userId !== null) {
                 throw new Error('Authenticated users cannot access guest games');
             }
