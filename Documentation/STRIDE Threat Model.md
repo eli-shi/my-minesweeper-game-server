@@ -22,6 +22,92 @@
 | **T20** | **Elevation of Privilege** | Database Privilege Escalation | - Prisma uses connection string (credentials in env)<br>- Database user should have limited permissions<br>- Prisma prevents direct SQL execution | - No verification of database user permissions<br>- Database credentials in environment (could be exposed)<br>- No database user role validation<br>- Prisma migrations could be run with elevated privileges |
 
 ---
+```mermaid
+graph TB
+
+    subgraph "External Systems"
+        FE[Frontend/Client]
+        FA[Firebase Auth]
+    end
+
+    subgraph "Express Server"
+        subgraph "Middleware Layer"
+            CORS[CORS Middleware]
+            HELMET[Helmet Security]
+            RATE[Rate Limiter]
+            VALID[Validation Middleware]
+            AUTH_MW[Auth Middleware&lt;br/&gt;verifyToken/optionalAuth]
+        end
+
+        subgraph "Routes"
+            AUTH_R[Auth Routes&lt;br/&gt;/auth/*]
+            GAME_R[Game Routes&lt;br/&gt;/games/*]
+            USER_R[User Routes&lt;br/&gt;/users/*]
+        end
+
+        subgraph "Controllers"
+            AUTH_C[AuthController]
+            GAME_C[GameController]
+            USER_C[UserController]
+        end
+
+        subgraph "Services"
+            AUTH_S[AuthService]
+            GAME_S[GameService]
+        end
+    end
+
+    subgraph "Data Storage"
+        CACHE[In-Memory Cache&lt;br/&gt;Active Games]
+        DB["(PostgreSQL&lt;br/&gt;Users, Games, Stats)"]
+    end
+
+    FE -->|HTTPS Requests| CORS
+    CORS --> HELMET
+    HELMET --> RATE
+    RATE --> VALID
+    VALID --> AUTH_MW
+    AUTH_MW --> AUTH_R
+    AUTH_MW --> GAME_R
+    AUTH_MW --> USER_R
+
+    AUTH_R --> AUTH_C
+    GAME_R --> GAME_C
+    USER_R --> USER_C
+
+    AUTH_C --> AUTH_S
+    GAME_C --> GAME_S
+    USER_C --> AUTH_S
+
+    AUTH_S <-->|Verify ID Tokens| FA
+    AUTH_S <-->|User CRUD| DB
+    GAME_S <-->|Active Game State| CACHE
+    GAME_S <-->|Completed Games &amp; Stats| DB
+
+    %% STRIDE Threats
+    S1[S: Token Theft]:::spoofing --> FE
+    S2[S: Token Forgery]:::spoofing --> FA
+    T1[T: Request Tampering]:::tampering --> CORS
+    R1[R: Action Denial]:::repudiation --> AUTH_MW
+    I1[I: Data Exposure]:::info --> AUTH_C
+    D1[D: API Flooding]:::dos --> RATE
+    E1[E: Privilege Escalation]:::elevation --> USER_C
+    T2[T: Game State Manipulation]:::tampering --> CACHE
+    I2[I: Sensitive Data Leak]:::info --> DB
+
+    style FE fill:#e1f5ff
+    style FA fill:#fff4e1
+    style CACHE fill:#ffe1f5
+    style DB fill:#e1ffe1
+
+    classDef spoofing fill:#ff9999;
+    classDef tampering fill:#ffcc99;
+    classDef repudiation fill:#ffff99;
+    classDef info fill:#99ff99;
+    classDef dos fill:#99ffff;
+    classDef elevation fill:#ff99ff;
+```
+---
 
 ### Implemented
 - Firebase ID token verification
