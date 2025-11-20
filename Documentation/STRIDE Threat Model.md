@@ -11,8 +11,7 @@
 | **T7** | **Tampering** | Leaderboard Data Tampering | - Rate limiting on leaderboard endpoints<br>- Database queries use Prisma (SQL injection protection) | - No input validation on leaderboard query parameters<br>- No caching (could be expensive to query)<br>- No pagination limits enforced |
 | **T8** | **Repudiation** | Game Action Repudiation | - Game actions tied to authenticated user ID<br>- Game state stored server-side<br>- Completed games saved to database with timestamps<br>- Guest games tracked with session tokens | - No audit logging for game actions<br>- No request/response logging<br>- No action timestamps in game cache |
 | **T9** | **Repudiation** | Authentication Event Repudiation | - Firebase Authentication logs events<br>- Database timestamps (`created_at`, `updated_at`, `last_game_played`) | - No application-level audit logging<br>- No IP address logging for auth events<br>- No device/session tracking<br>- No failed login attempt logging |
-| **T10** | **Information Disclosure** | Sensitive Data Exposure in API Responses | - Passwords not returned in responses<br>- Generic error messages in production<br>- Helmet.js security headers<br>- Error handler returns generic message | - Error messages may leak stack traces in development<br>- Game board structure exposed (could help cheaters)<br>- User IDs exposed in responses<br>- No data sanitization before logging |
-| **T11** | **Information Disclosure** | Database Information Disclosure | - Prisma ORM prevents SQL injection<br>- Parameterized queries<br>- Database credentials in environment variables<br>- User ID validation in queries | - No query result filtering (returns all user fields)<br>- Password hashes stored in database (bcrypt, but still sensitive)<br>- No database encryption at rest mentioned<br>- No connection encryption verification |
+| **T11** | **Information Disclosure** | Database Information Disclosure | - Prisma ORM prevents SQL injection<br>- Parameterized queries<br>- Database credentials in environment variables<br>- User ID validation in queries | - No query result filtering (returns all user fields)<br>- No database encryption at rest mentioned |
 | **T12** | **Information Disclosure** | Game State Information Disclosure | - Board only revealed on game over<br>- Only revealed cells sent to client<br>- Mine positions not exposed during gameplay<br>- Game state stored server-side<br>- Session tokens prevent unauthorized game access | - Game cache in memory (could be dumped)<br>- No encryption for game state in transit |
 | **T14** | **Denial of Service** | Rate Limiting Bypass | - Rate limiting on all endpoints<br>- Different limits for different endpoint types<br>- IP-based rate limiting | - IP-based limiting vulnerable to IP rotation<br>- No user-based rate limiting (only IP) |
 | **T15** | **Denial of Service** | Resource Exhaustion (Memory/CPU) | - Request body size limit (10MB)<br>- Game cache cleanup (expired games removed)<br>- Game timeout (5 minutes max duration)<br>- Game cache expiration (2 hours) | - No limit on concurrent games per user<br>- No limit on total games in cache<br>- Large board sizes could consume memory |
@@ -24,28 +23,26 @@
 
 ---
 
-## Security Controls Checklist
-
 ### Implemented
-- [x] Firebase ID token verification
-- [x] Password hashing (bcrypt)
-- [x] Input validation (Zod)
-- [x] Rate limiting
-- [x] CORS configuration
-- [x] Helmet.js security headers
-- [x] Error handling
-- [x] Game state server-side
-- [x] Database transactions
-- [x] Foreign key constraints
-- [x] Session tokens for guest games (prevents cross-guest access)
-- [x] Cryptographically secure UUIDs for game IDs
+- Firebase ID token verification
+- Password hashing (bcrypt)
+- Input validation (Zod)
+- Rate limiting
+- CORS configuration
+- Helmet.js security headers
+- Error handling
+- Game state server-side
+- Database transactions
+- Foreign key constraints
+- Session tokens for guest games (prevents cross-guest access)
+- Cryptographically secure UUIDs for game IDs
 
-### Recommended
-- [ ] User-based rate limiting
-- [ ] Audit logging
-- [ ] Account lockout
-- [ ] Email verification
-- [ ] Resource limits
-- [ ] Database audit logging
-- [ ] Session management (for authenticated users)
-- [ ] implement Redis instead of in-memory solution
+### To Be Implemented
+- User-based rate limiting
+- Audit logging
+- Account lockout
+- Email verification
+- Resource limits
+- Database audit logging
+- Session management (for authenticated users)
+- implement Redis instead of in-memory solution
