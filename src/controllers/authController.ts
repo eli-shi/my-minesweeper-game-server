@@ -50,16 +50,12 @@ export class AuthController {
                 try {
                     await this.authService.revokeRefreshTokens(userId);
                 } catch (revokeError) {
-                    console.warn(
-                        'Optional logout: could not revoke tokens (possibly already revoked):',
-                        revokeError instanceof Error ? revokeError.message : revokeError
-                    );
+
                 }
             }
 
             res.json({ message: 'Successfully logged out' });
         } catch (error) {
-            console.error('Logout error (returning success anyway):', error);
             res.json({ message: 'Successfully logged out' });
         }
     };

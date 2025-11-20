@@ -77,8 +77,6 @@ export class AuthService {
         try {
             const userId: string = String(userRecord.uid).trim();
 
-            console.log('Looking up user with id:', userId, 'Type:', typeof userId, 'Length:', userId.length);
-
             let user = await this.prisma.user.findFirst({
                 where: {
                     id: userId
@@ -147,8 +145,6 @@ export class AuthService {
     async sendPasswordResetEmail(email: string): Promise<string> {
         try {
             const link = await auth.generatePasswordResetLink(email);
-
-            console.log(`Password reset link for ${email}: ${link}`);
             return link;
         } catch (error) {
             Sentry.captureException(error, {

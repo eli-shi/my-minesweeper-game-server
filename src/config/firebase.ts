@@ -19,9 +19,6 @@ if (getApps().length === 0) {
     initializeApp({
         credential: cert(credentials),
     });
-    console.log('Firebase initialized in backend');
-} else {
-    console.log('Firebase already initialized');
 }
 
 export default admin;

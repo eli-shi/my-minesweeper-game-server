@@ -3,7 +3,7 @@ import { GameService } from '../services/gameService.js';
 import { DIFFICULTY_CONFIGS } from '../config/gameConfig.js';
 import { gameSchemas } from '../validation/zodSchemas.js';
 
-const MAX_GAME_DURATION_MS = 5 * 60 * 1000;
+const MAX_GAME_DURATION_MS = 20 * 60 * 1000;
 
 export class GameController {
     private gameService: GameService;
@@ -45,7 +45,7 @@ export class GameController {
 
             this.gameService.revealCell(board, revealed, firstClickRow, firstClickCol, config.rows, config.cols);
 
-            const gameId = this.gameService.createActiveGame(
+            const { gameId, sessionToken } = this.gameService.createActiveGame(
                 userId,
                 difficulty,
                 board,
@@ -59,7 +59,7 @@ export class GameController {
                 )
             );
 
-            res.status(201).json({
+            const response: any = {
                 gameId,
                 status: 'playing',
                 rows: config.rows,
@@ -68,7 +68,14 @@ export class GameController {
                 flagged,
                 visibleBoard,
                 remainingMines: this.gameService.calculateRemainingMines(config.mines, flagged, config.rows, config.cols),
-            });
+            };
+
+            // Include sessionToken for guest games
+            if (sessionToken) {
+                response.sessionToken = sessionToken;
+            }
+
+            res.status(201).json(response);
         } catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to create game' });
         }
@@ -77,10 +84,10 @@ export class GameController {
     revealCell = async (req: Request, res: Response): Promise<void> => {
         try {
             const validatedData = gameSchemas.revealBody.parse(req.body);
-            const { gameId, row, col } = validatedData;
+            const { gameId, row, col, sessionToken } = validatedData;
             const userId = req.user?.uid;
 
-            const game = this.gameService.getActiveGame(gameId, userId);
+            const game = this.gameService.getActiveGame(gameId, userId, sessionToken);
             if (!game) {
                 res.status(404).json({ error: 'Game not found' });
                 return;
@@ -104,7 +111,7 @@ export class GameController {
                     try {
                         await this.gameService.saveCompletedGame(game.userId, game.difficulty, 'lost', new Date());
                     } catch (error) {
-                        console.error('Failed to save completed game (timeout):', error);
+
                     }
                 }
                 this.gameService.deleteActiveGame(gameId);
@@ -129,14 +136,10 @@ export class GameController {
                 config.mines
             );
 
-            console.log(`[revealCell] Result:`, { status: result.status, gameOver: result.gameOver, userId: game.userId });
-
             this.gameService.updateActiveGame(gameId, result.revealed, game.flagged, result.status);
 
             if (result.gameOver) {
-                console.log(`[revealCell] Game is over! Status: ${result.status}, UserId: ${game.userId}`);
                 if (game.userId) {
-                    console.log(`[revealCell] Calling saveCompletedGame for user ${game.userId}`);
                     try {
                         await this.gameService.saveCompletedGame(
                             game.userId,
@@ -145,10 +148,8 @@ export class GameController {
                             result.status === 'won' ? new Date() : undefined
                         );
                     } catch (error) {
-                        console.error('Failed to save completed game:', error);
+
                     }
-                } else {
-                    console.log(`[revealCell] No userId, skipping save (guest game)`);
                 }
                 this.gameService.deleteActiveGame(gameId);
 
@@ -178,10 +179,10 @@ export class GameController {
     toggleFlag = async (req: Request, res: Response): Promise<void> => {
         try {
             const validatedData = gameSchemas.toggleFlagBody.parse(req.body);
-            const { gameId, row, col } = validatedData;
+            const { gameId, row, col, sessionToken } = validatedData;
             const userId = req.user?.uid;
 
-            const game = this.gameService.getActiveGame(gameId, userId);
+            const game = this.gameService.getActiveGame(gameId, userId, sessionToken);
             if (!game) {
                 res.status(404).json({ error: 'Game not found' });
                 return;
