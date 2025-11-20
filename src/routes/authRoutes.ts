@@ -1,5 +1,5 @@
 import express from 'express';
-import { verifyToken, optionalAuth } from '../middleware/auth.js';
+import { optionalAuth } from '../middleware/auth.js';
 import { AuthController } from '../controllers/authController.js';
 import { validateBody } from '../middleware/validation.js';
 import { authSchemas } from '../validation/zodSchemas.js';
@@ -15,7 +15,7 @@ router.post('/logout', optionalAuth, authController.logout);
 
 router.post('/password-reset-request', validateBody(authSchemas.passwordResetRequestBody), authController.passwordResetRequest);
 
-router.post('/password-reset', authController.passwordReset);
+router.post('/password-reset', validateBody(authSchemas.passwordResetBody), authController.passwordReset);
 
 router.post('/refresh-token', validateBody(authSchemas.refreshBody), authController.refreshToken);
 

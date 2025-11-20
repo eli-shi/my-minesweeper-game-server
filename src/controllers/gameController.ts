@@ -24,6 +24,7 @@ export class GameController {
         try {
             const validatedData = gameSchemas.createBody.parse(req.body);
             const { difficulty, firstClickRow, firstClickCol } = validatedData;
+            const userId = req.user?.uid ?? null;
 
             const config = DIFFICULTY_CONFIGS[difficulty.toLowerCase()];
             if (!config) {
@@ -31,7 +32,6 @@ export class GameController {
                 return;
             }
 
-            // Generate board
             const board = this.gameService.generateBoard(
                 config.rows,
                 config.cols,
@@ -40,23 +40,34 @@ export class GameController {
                 firstClickCol
             );
 
-            // Initialize revealed and flagged arrays
             const revealed: boolean[][] = Array(config.rows).fill(null).map(() => Array(config.cols).fill(false));
             const flagged: boolean[][] = Array(config.rows).fill(null).map(() => Array(config.cols).fill(false));
 
-            // Reveal first click
             this.gameService.revealCell(board, revealed, firstClickRow, firstClickCol, config.rows, config.cols);
 
+            const gameId = this.gameService.createActiveGame(
+                userId,
+                difficulty,
+                board,
+                revealed,
+                flagged
+            );
+
+            const visibleBoard = revealed.map((row, r) =>
+                row.map((isRevealed, c) =>
+                    isRevealed ? board[r][c] : null
+                )
+            );
+
             res.status(201).json({
+                gameId,
                 status: 'playing',
                 rows: config.rows,
                 cols: config.cols,
                 mines: config.mines,
-                board: board,
-                revealed: revealed,
-                flagged: flagged,
+                flagged,
+                visibleBoard,
                 remainingMines: this.gameService.calculateRemainingMines(config.mines, flagged, config.rows, config.cols),
-                startedAt: new Date().toISOString(),
             });
         } catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to create game' });
@@ -66,39 +77,51 @@ export class GameController {
     revealCell = async (req: Request, res: Response): Promise<void> => {
         try {
             const validatedData = gameSchemas.revealBody.parse(req.body);
-            const { board, revealed, flagged, row, col, difficulty, startedAt } = validatedData;
-            const userId = req.user?.uid ?? null;
+            const { gameId, row, col } = validatedData;
+            const userId = req.user?.uid;
 
-            const config = DIFFICULTY_CONFIGS[difficulty.toLowerCase()];
-            if (!config) {
-                res.status(400).json({ error: `Invalid difficulty: ${difficulty}` });
+            const game = this.gameService.getActiveGame(gameId, userId);
+            if (!game) {
+                res.status(404).json({ error: 'Game not found' });
                 return;
             }
 
-            const elapsedMs = Date.now() - startedAt.getTime();
+            if (game.status !== 'playing') {
+                res.status(400).json({ error: 'Game is already over' });
+                return;
+            }
+
+            const config = DIFFICULTY_CONFIGS[game.difficulty.toLowerCase()];
+            if (!config) {
+                res.status(400).json({ error: `Invalid difficulty: ${game.difficulty}` });
+                return;
+            }
+
+            const elapsedMs = Date.now() - game.startedAt.getTime();
             if (elapsedMs > MAX_GAME_DURATION_MS) {
-                const finalRevealed = revealed.map(row => row.map(() => true));
-                if (userId) {
-                    await this.gameService.saveCompletedGame(
-                        userId,
-                        difficulty,
-                        'lost',
-                        new Date()
-                    );
+                this.gameService.updateActiveGame(gameId, game.revealed, game.flagged, 'lost');
+                if (game.userId) {
+                    try {
+                        await this.gameService.saveCompletedGame(game.userId, game.difficulty, 'lost', new Date());
+                    } catch (error) {
+                        console.error('Failed to save completed game (timeout):', error);
+                    }
                 }
+                this.gameService.deleteActiveGame(gameId);
+
                 res.json({
                     status: 'lost',
                     reason: 'time_limit_exceeded',
-                    revealed: finalRevealed,
-                    remainingMines: this.gameService.calculateRemainingMines(config.mines, flagged, config.rows, config.cols),
+                    board: game.board,
+                    remainingMines: this.gameService.calculateRemainingMines(config.mines, game.flagged, config.rows, config.cols),
                 });
                 return;
             }
 
             const result = this.gameService.processReveal(
-                board,
-                revealed,
-                flagged,
+                game.board,
+                game.revealed,
+                game.flagged,
                 row,
                 col,
                 config.rows,
@@ -106,20 +129,47 @@ export class GameController {
                 config.mines
             );
 
-            if (result.gameOver && userId) {
-                await this.gameService.saveCompletedGame(
-                    userId,
-                    difficulty,
-                    result.status as 'won' | 'lost',
-                    result.status === 'won' ? new Date() : undefined
-                );
-            }
+            console.log(`[revealCell] Result:`, { status: result.status, gameOver: result.gameOver, userId: game.userId });
 
-            res.json({
-                status: result.status,
-                revealed: result.revealed,
-                remainingMines: this.gameService.calculateRemainingMines(config.mines, flagged, config.rows, config.cols),
-            });
+            this.gameService.updateActiveGame(gameId, result.revealed, game.flagged, result.status);
+
+            if (result.gameOver) {
+                console.log(`[revealCell] Game is over! Status: ${result.status}, UserId: ${game.userId}`);
+                if (game.userId) {
+                    console.log(`[revealCell] Calling saveCompletedGame for user ${game.userId}`);
+                    try {
+                        await this.gameService.saveCompletedGame(
+                            game.userId,
+                            game.difficulty,
+                            result.status as 'won' | 'lost',
+                            result.status === 'won' ? new Date() : undefined
+                        );
+                    } catch (error) {
+                        console.error('Failed to save completed game:', error);
+                    }
+                } else {
+                    console.log(`[revealCell] No userId, skipping save (guest game)`);
+                }
+                this.gameService.deleteActiveGame(gameId);
+
+                res.json({
+                    status: result.status,
+                    board: game.board,
+                    remainingMines: this.gameService.calculateRemainingMines(config.mines, game.flagged, config.rows, config.cols),
+                });
+            } else {
+                const visibleBoard = result.revealed.map((row, r) =>
+                    row.map((isRevealed, c) =>
+                        isRevealed ? game.board[r][c] : null
+                    )
+                );
+
+                res.json({
+                    status: result.status,
+                    visibleBoard,
+                    remainingMines: this.gameService.calculateRemainingMines(config.mines, game.flagged, config.rows, config.cols),
+                });
+            }
         } catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to reveal cell' });
         }
@@ -128,16 +178,28 @@ export class GameController {
     toggleFlag = async (req: Request, res: Response): Promise<void> => {
         try {
             const validatedData = gameSchemas.toggleFlagBody.parse(req.body);
-            const { revealed, flagged, row, col, difficulty } = validatedData;
+            const { gameId, row, col } = validatedData;
+            const userId = req.user?.uid;
 
-            const config = DIFFICULTY_CONFIGS[difficulty.toLowerCase()];
-            if (!config) {
-                res.status(400).json({ error: `Invalid difficulty: ${difficulty}` });
+            const game = this.gameService.getActiveGame(gameId, userId);
+            if (!game) {
+                res.status(404).json({ error: 'Game not found' });
                 return;
             }
 
-            // Toggle flag
-            const newFlagged = this.gameService.toggleFlag(flagged, row, col, revealed);
+            if (game.status !== 'playing') {
+                res.status(400).json({ error: 'Game is already over' });
+                return;
+            }
+
+            const config = DIFFICULTY_CONFIGS[game.difficulty.toLowerCase()];
+            if (!config) {
+                res.status(400).json({ error: `Invalid difficulty: ${game.difficulty}` });
+                return;
+            }
+
+            const newFlagged = this.gameService.toggleFlag(game.flagged, row, col, game.revealed);
+            this.gameService.updateActiveGame(gameId, game.revealed, newFlagged, game.status);
 
             res.json({
                 flagged: newFlagged,
@@ -150,9 +212,6 @@ export class GameController {
 
     getGameHistory = async (req: Request, res: Response): Promise<void> => {
         try {
-            console.log('getGameHistory called, user:', req.user);
-            console.log('query params:', req.query);
-
             const userId = req.user?.uid;
             if (!userId) {
                 res.status(401).json({ error: 'User not authenticated' });
@@ -162,12 +221,9 @@ export class GameController {
             const limitParam = req.query.limit;
             const limit = limitParam ? parseInt(String(limitParam), 10) : 10;
 
-            console.log('Fetching games for user:', userId, 'with limit:', limit);
             const games = await this.gameService.getUserGames(userId, limit);
-            console.log('Found games:', games.length);
             res.json(games);
         } catch (error) {
-            console.error('Error in getGameHistory:', error);
             res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to get game history' });
         }
     };

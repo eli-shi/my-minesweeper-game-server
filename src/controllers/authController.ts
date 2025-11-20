@@ -89,15 +89,38 @@ export class AuthController {
                 return;
             }
 
-            res.json({ message: 'Password reset email sent (not implemented yet)' });
+            const resetLink = await this.authService.sendPasswordResetEmail(email);
+
+            if (process.env.NODE_ENV === 'development') {
+                res.json({
+                    message: 'Password reset link generated',
+                    resetLink
+                });
+            } else {
+                res.json({ message: 'If an account exists with that email, a password reset link has been sent.' });
+            }
         } catch (error) {
-            res.status(400).json({ error: error instanceof Error ? error.message : 'Password reset request failed' });
+            res.json({ message: 'If an account exists with that email, a password reset link has been sent.' });
         }
     };
 
     passwordReset = async (req: Request, res: Response): Promise<void> => {
         try {
-            res.json({ message: 'Password reset (not implemented yet)' });
+            const { userId, newPassword } = req.body;
+
+            if (!userId || !newPassword) {
+                res.status(400).json({ error: 'User ID and new password are required' });
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                res.status(400).json({ error: 'Password must be at least 6 characters long' });
+                return;
+            }
+
+            await this.authService.updatePassword(userId, newPassword);
+
+            res.json({ message: 'Password has been updated successfully.' });
         } catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : 'Password reset failed' });
         }

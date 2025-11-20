@@ -5,11 +5,10 @@ const prisma = new PrismaClient();
 async function main() {
     console.log('Seeding database...');
 
-    // Seed Difficulty table
     const difficulties = [
-        { diff_id: 1, diff_name: 'Easy' },
-        { diff_id: 2, diff_name: 'Medium' },
-        { diff_id: 3, diff_name: 'Hard' },
+        { diff_id: 1, diff_name: 'easy' },
+        { diff_id: 2, diff_name: 'medium' },
+        { diff_id: 3, diff_name: 'hard' },
     ];
 
     for (const difficulty of difficulties) {
@@ -27,7 +26,6 @@ async function main() {
         }
     }
 
-    // Reset the sequence to ensure future auto-increments work correctly
     await prisma.$executeRawUnsafe(`
     SELECT setval('"Difficulty_diff_id_seq"', (SELECT MAX("diff_id") FROM "Difficulty"), true);
   `);

@@ -1,5 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { DIFFICULTY_CONFIGS, DIFFICULTY_IDS } from '../config/gameConfig.js';
+import { gameCache } from './gameCache.js';
+import { randomUUID } from 'crypto';
+import * as Sentry from '@sentry/node';
 
 export interface Cell {
     isMine: boolean;
@@ -26,6 +29,75 @@ export class GameService {
 
     async disconnect(): Promise<void> {
         await this.prisma.$disconnect();
+        gameCache.destroy();
+    }
+
+    createActiveGame(
+        userId: string | null,
+        difficulty: string,
+        board: Cell[][],
+        revealed: boolean[][],
+        flagged: boolean[][],
+    ): string {
+        const gameId = randomUUID();
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 2);
+
+        gameCache.set(gameId, {
+            gameId,
+            userId,
+            difficulty,
+            board,
+            revealed,
+            flagged,
+            status: 'playing',
+            startedAt: new Date(),
+            expiresAt,
+        });
+
+        return gameId;
+    }
+
+    getActiveGame(gameId: string, userId?: string): {
+        gameId: string;
+        userId: string | null;
+        difficulty: string;
+        board: Cell[][];
+        revealed: boolean[][];
+        flagged: boolean[][];
+        status: string;
+        startedAt: Date;
+    } | null {
+        const game = gameCache.get(gameId);
+        if (!game) return null;
+
+        if (game.userId && userId && game.userId !== userId) {
+            throw new Error('Unauthorized to access this game');
+        }
+
+        return {
+            gameId: game.gameId,
+            userId: game.userId,
+            difficulty: game.difficulty,
+            board: game.board,
+            revealed: game.revealed,
+            flagged: game.flagged,
+            status: game.status,
+            startedAt: game.startedAt,
+        };
+    }
+
+    updateActiveGame(
+        gameId: string,
+        revealed: boolean[][],
+        flagged: boolean[][],
+        status: string
+    ): void {
+        gameCache.update(gameId, { revealed, flagged, status });
+    }
+
+    deleteActiveGame(gameId: string): void {
+        gameCache.delete(gameId);
     }
 
     generateBoard(rows: number, cols: number, mines: number, firstClickRow: number, firstClickCol: number): Cell[][] {
@@ -164,39 +236,60 @@ export class GameService {
     }
 
     async saveCompletedGame(userId: string, difficulty: string, status: 'won' | 'lost', solvedTime?: Date): Promise<void> {
-        const diffId = DIFFICULTY_IDS[difficulty.toLowerCase()];
-        if (!diffId) {
-            throw new Error(`Invalid difficulty: ${difficulty}`);
+        try {
+            console.log(`[saveCompletedGame] Starting - userId: ${userId}, difficulty: ${difficulty}, status: ${status}`);
+
+            const diffId = DIFFICULTY_IDS[difficulty.toLowerCase()];
+            if (!diffId) {
+                throw new Error(`Invalid difficulty: ${difficulty}`);
+            }
+            console.log(`[saveCompletedGame] Difficulty ID: ${diffId}`);
+
+            const difficultyExists = await this.prisma.difficulty.findUnique({
+                where: { diff_id: diffId },
+            });
+
+            if (!difficultyExists) {
+                throw new Error(`Difficulty with ID ${diffId} (${difficulty}) does not exist in database. Please run: npm run prisma:seed`);
+            }
+            console.log(`[saveCompletedGame] Difficulty exists in DB:`, difficultyExists);
+
+            await this.prisma.$transaction(async (tx) => {
+                const game = await tx.game.create({
+                    data: {
+                        user_id: userId,
+                        diff_id: diffId,
+                        status: status,
+                        solved_time: solvedTime || (status === 'won' ? new Date() : null),
+                    },
+                });
+                console.log(`[saveCompletedGame] Game created:`, game);
+
+                await tx.user.update({
+                    where: { id: userId },
+                    data: { last_game_played: new Date() },
+                });
+                console.log(`[saveCompletedGame] User updated with last_game_played`);
+
+                await this.updateGameModeStatsWithTransaction(tx, userId, diffId, status === 'won');
+                console.log(`[saveCompletedGame] Difficulty stats updated`);
+            });
+
+            console.log(`[saveCompletedGame] Completed successfully`);
+        } catch (error) {
+            Sentry.captureException(error, {
+                extra: {
+                    userId,
+                    difficulty,
+                    status,
+                    operation: 'saveCompletedGame'
+                }
+            });
+            console.error('[saveCompletedGame] Error:', error);
+            throw error;
         }
-
-        const difficultyExists = await this.prisma.difficulty.findUnique({
-            where: { diff_id: diffId },
-        });
-
-        if (!difficultyExists) {
-            throw new Error(`Difficulty with ID ${diffId} (${difficulty}) does not exist in database. Please run: npm run prisma:seed`);
-        }
-
-        await this.prisma.game.create({
-            data: {
-                user_id: userId,
-                diff_id: diffId,
-                status: status,
-                solved_time: solvedTime || (status === 'won' ? new Date() : null),
-            },
-        });
-
-        await this.prisma.user.update({
-            where: { id: userId },
-            data: { last_game_played: new Date() },
-        });
-
-        await this.updateDifficultyStats(userId, diffId, status === 'won');
     }
 
-    /**
-     * Get user's game history (only completed games)
-     */
     async getUserGames(userId: string, limit: number = 10): Promise<any[]> {
         return await this.prisma.game.findMany({
             where: { user_id: userId },
@@ -208,14 +301,18 @@ export class GameService {
         });
     }
 
-    private async updateDifficultyStats(userId: string, diffId: number, won: boolean): Promise<void> {
+    private async updateGameModeStats(userId: string, diffId: number, won: boolean): Promise<void> {
+        await this.updateGameModeStatsWithTransaction(this.prisma, userId, diffId, won);
+    }
+
+    private async updateGameModeStatsWithTransaction(tx: any, userId: string, diffId: number, won: boolean): Promise<void> {
         if (diffId === 1) {
-            const existing = await this.prisma.easyMode.findUnique({
+            const existing = await tx.easyMode.findUnique({
                 where: { user_id: userId },
             });
 
             if (existing) {
-                await this.prisma.easyMode.update({
+                await tx.easyMode.update({
                     where: { user_id: userId },
                     data: {
                         played: existing.played + 1,
@@ -223,7 +320,7 @@ export class GameService {
                     },
                 });
             } else {
-                await this.prisma.easyMode.create({
+                await tx.easyMode.create({
                     data: {
                         user_id: userId,
                         diff_id: diffId,
@@ -233,12 +330,12 @@ export class GameService {
                 });
             }
         } else if (diffId === 2) {
-            const existing = await this.prisma.mediumMode.findUnique({
+            const existing = await tx.mediumMode.findUnique({
                 where: { user_id: userId },
             });
 
             if (existing) {
-                await this.prisma.mediumMode.update({
+                await tx.mediumMode.update({
                     where: { user_id: userId },
                     data: {
                         played: existing.played + 1,
@@ -246,7 +343,7 @@ export class GameService {
                     },
                 });
             } else {
-                await this.prisma.mediumMode.create({
+                await tx.mediumMode.create({
                     data: {
                         user_id: userId,
                         diff_id: diffId,
@@ -256,12 +353,12 @@ export class GameService {
                 });
             }
         } else if (diffId === 3) {
-            const existing = await this.prisma.hardMode.findUnique({
+            const existing = await tx.hardMode.findUnique({
                 where: { user_id: userId },
             });
 
             if (existing) {
-                await this.prisma.hardMode.update({
+                await tx.hardMode.update({
                     where: { user_id: userId },
                     data: {
                         played: existing.played + 1,
@@ -269,7 +366,7 @@ export class GameService {
                     },
                 });
             } else {
-                await this.prisma.hardMode.create({
+                await tx.hardMode.create({
                     data: {
                         user_id: userId,
                         diff_id: diffId,

@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import admin from '../config/firebase.js';
 import { getAuth, UserRecord } from 'firebase-admin/auth';
+import * as Sentry from '@sentry/node';
 
 const auth = getAuth();
 
@@ -62,6 +63,12 @@ export class AuthService {
             });
             return user;
         } catch (error) {
+            Sentry.captureException(error, {
+                extra: {
+                    email,
+                    operation: 'createUser'
+                }
+            });
             throw new Error(`User creation failed: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
@@ -127,7 +134,40 @@ export class AuthService {
             await auth.deleteUser(userId);
             await this.prisma.user.delete({ where: { id: userId } });
         } catch (error) {
+            Sentry.captureException(error, {
+                extra: {
+                    userId,
+                    operation: 'deleteUser'
+                }
+            });
             throw new Error(`User deletion failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    async sendPasswordResetEmail(email: string): Promise<string> {
+        try {
+            const link = await auth.generatePasswordResetLink(email);
+
+            console.log(`Password reset link for ${email}: ${link}`);
+            return link;
+        } catch (error) {
+            Sentry.captureException(error, {
+                extra: {
+                    email,
+                    operation: 'sendPasswordResetEmail'
+                }
+            });
+            throw new Error(`Failed to send password reset email: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    async updatePassword(userId: string, newPassword: string): Promise<void> {
+        try {
+            await auth.updateUser(userId, {
+                password: newPassword,
+            });
+        } catch (error) {
+            throw new Error(`Failed to update password: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 }

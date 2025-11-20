@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import '../config/firebase.js';
 import { getAuth } from 'firebase-admin/auth';
+import * as Sentry from '@sentry/node';
 
 const auth = getAuth();
 
@@ -17,12 +18,7 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
         return res.status(401).json({ error: 'No token provided' });
     }
 
-    console.log('Token received - Length:', token.length);
-    console.log('Token preview (first 50 chars):', token.substring(0, 50));
-    console.log('Token preview (last 50 chars):', token.substring(Math.max(0, token.length - 50)));
-
     if (token.length < 100) {
-        console.error('Token appears to be too short to be a JWT. Length:', token.length);
         return res.status(403).json({
             error: 'Invalid token format. Expected Firebase ID token (JWT), but received a short string. Make sure you are sending the Firebase ID token, not the user ID.'
         });
@@ -30,7 +26,6 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
 
     const parts = token.split('.');
     if (parts.length !== 3) {
-        console.error('Token does not appear to be a valid JWT. Parts:', parts.length);
         return res.status(403).json({
             error: 'Invalid token format. JWT tokens should have 3 parts separated by dots. Make sure you are sending the complete Firebase ID token.'
         });
@@ -41,9 +36,13 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
         req.user = decodedToken;
         next();
     } catch (error: any) {
-        console.error('Error verifying token:', error);
-        console.error('Error code:', error?.code);
-        console.error('Error message:', error?.message);
+        Sentry.captureException(error, {
+            extra: {
+                errorCode: error?.code,
+                operation: 'verifyToken'
+            }
+        });
+        console.error('Token verification failed - Error code:', error?.code);
         if (error?.code === 'auth/argument-error') {
             return res.status(403).json({
                 error: 'Invalid token format. The token provided is not a valid Firebase ID token. Make sure you are calling `await user.getIdToken()` in your frontend, not `user.uid` or any other value.'
