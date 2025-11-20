@@ -42,7 +42,6 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
                 operation: 'verifyToken'
             }
         });
-        console.error('Token verification failed - Error code:', error?.code);
         if (error?.code === 'auth/argument-error') {
             return res.status(403).json({
                 error: 'Invalid token format. The token provided is not a valid Firebase ID token. Make sure you are calling `await user.getIdToken()` in your frontend, not `user.uid` or any other value.'
@@ -85,9 +84,10 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
     }
 
     try {
-        const decodedToken = await auth.verifyIdToken(token, false);
+        const decodedToken = await auth.verifyIdToken(token, true);
         req.user = decodedToken;
     } catch (error) {
+
     }
 
     next();

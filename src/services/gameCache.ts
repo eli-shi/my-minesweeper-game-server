@@ -3,6 +3,7 @@ import { Cell } from './gameService.js';
 interface CachedGame {
     gameId: string;
     userId: string | null;
+    sessionToken?: string; // For guest games - prevents cross-guest access
     difficulty: string;
     board: Cell[][];
     revealed: boolean[][];
@@ -55,9 +56,6 @@ class GameCache {
                 this.games.delete(gameId);
                 cleaned++;
             }
-        }
-        if (cleaned > 0) {
-            console.log(`Cleaned up ${cleaned} expired games`);
         }
     }
 

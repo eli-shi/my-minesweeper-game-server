@@ -38,14 +38,18 @@ export class GameService {
         board: Cell[][],
         revealed: boolean[][],
         flagged: boolean[][],
-    ): string {
+    ): { gameId: string; sessionToken?: string } {
         const gameId = randomUUID();
         const expiresAt = new Date();
         expiresAt.setHours(expiresAt.getHours() + 2);
 
+        // Generate session token for guest games to prevent cross-guest access
+        const sessionToken = userId === null ? randomUUID() : undefined;
+
         gameCache.set(gameId, {
             gameId,
             userId,
+            sessionToken,
             difficulty,
             board,
             revealed,
@@ -55,10 +59,10 @@ export class GameService {
             expiresAt,
         });
 
-        return gameId;
+        return { gameId, sessionToken };
     }
 
-    getActiveGame(gameId: string, userId?: string): {
+    getActiveGame(gameId: string, userId?: string, sessionToken?: string): {
         gameId: string;
         userId: string | null;
         difficulty: string;
@@ -71,8 +75,22 @@ export class GameService {
         const game = gameCache.get(gameId);
         if (!game) return null;
 
-        if (game.userId && userId && game.userId !== userId) {
-            throw new Error('Unauthorized to access this game');
+        // Authorization check:
+        // - If game belongs to authenticated user, userId must match
+        // - If game is a guest game (userId is null), require sessionToken to match
+        if (game.userId !== null) {
+            // Authenticated user's game - must match userId
+            if (game.userId !== userId) {
+                throw new Error('Unauthorized to access this game');
+            }
+        } else {
+            // Guest game - require sessionToken to prevent cross-guest access
+            if (userId !== undefined && userId !== null) {
+                throw new Error('Authenticated users cannot access guest games');
+            }
+            if (!game.sessionToken || game.sessionToken !== sessionToken) {
+                throw new Error('Unauthorized to access this game. Invalid session token.');
+            }
         }
 
         return {
@@ -237,13 +255,10 @@ export class GameService {
 
     async saveCompletedGame(userId: string, difficulty: string, status: 'won' | 'lost', solvedTime?: Date): Promise<void> {
         try {
-            console.log(`[saveCompletedGame] Starting - userId: ${userId}, difficulty: ${difficulty}, status: ${status}`);
-
             const diffId = DIFFICULTY_IDS[difficulty.toLowerCase()];
             if (!diffId) {
                 throw new Error(`Invalid difficulty: ${difficulty}`);
             }
-            console.log(`[saveCompletedGame] Difficulty ID: ${diffId}`);
 
             const difficultyExists = await this.prisma.difficulty.findUnique({
                 where: { diff_id: diffId },
@@ -252,7 +267,6 @@ export class GameService {
             if (!difficultyExists) {
                 throw new Error(`Difficulty with ID ${diffId} (${difficulty}) does not exist in database. Please run: npm run prisma:seed`);
             }
-            console.log(`[saveCompletedGame] Difficulty exists in DB:`, difficultyExists);
 
             await this.prisma.$transaction(async (tx) => {
                 const game = await tx.game.create({
@@ -263,19 +277,14 @@ export class GameService {
                         solved_time: solvedTime || (status === 'won' ? new Date() : null),
                     },
                 });
-                console.log(`[saveCompletedGame] Game created:`, game);
 
                 await tx.user.update({
                     where: { id: userId },
                     data: { last_game_played: new Date() },
                 });
-                console.log(`[saveCompletedGame] User updated with last_game_played`);
 
                 await this.updateGameModeStatsWithTransaction(tx, userId, diffId, status === 'won');
-                console.log(`[saveCompletedGame] Difficulty stats updated`);
             });
-
-            console.log(`[saveCompletedGame] Completed successfully`);
         } catch (error) {
             Sentry.captureException(error, {
                 extra: {
@@ -285,7 +294,6 @@ export class GameService {
                     operation: 'saveCompletedGame'
                 }
             });
-            console.error('[saveCompletedGame] Error:', error);
             throw error;
         }
     }

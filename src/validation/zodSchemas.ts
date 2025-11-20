@@ -66,11 +66,13 @@ export const gameSchemas = {
         gameId: z.string().uuid(),
         row: z.number().int().nonnegative(),
         col: z.number().int().nonnegative(),
+        sessionToken: z.string().uuid().optional(), // Required for guest games
     }),
     toggleFlagBody: z.object({
         gameId: z.string().uuid(),
         row: z.number().int().nonnegative(),
         col: z.number().int().nonnegative(),
+        sessionToken: z.string().uuid().optional(), // Required for guest games
     }),
     historyQuery: z.object({
         limit: z
