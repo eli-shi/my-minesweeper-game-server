@@ -189,6 +189,8 @@ graph TB
 - **EasyMode/MediumMode/HardMode** - Per-user statistics by difficulty
 - **Friend** - User relationships (for future social features)
 
+You can find the full data model here: https://dbdiagram.io/d/Minesweeper-6900fddb357668b7320a0051
+
 See `prisma/schema.prisma` for full schema details.
 
 ## Configuration
