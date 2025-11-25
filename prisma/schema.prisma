@@ -50,13 +50,17 @@ model Game {
 
   user       User       @relation(fields: [user_id], references: [id])
   difficulty Difficulty @relation(fields: [diff_id], references: [diff_id])
+
+  @@index([user_id, created_at(sort: Desc)])
+  @@index([diff_id, status])
+  @@index([status, solved_time])
 }
 
 model Difficulty {
   diff_id   Int    @id @default(autoincrement())
   diff_name String
 
-  games       Game[] // Only completed games
+  games       Game[]
   easyModes   EasyMode[]
   mediumModes MediumMode[]
   hardModes   HardMode[]
