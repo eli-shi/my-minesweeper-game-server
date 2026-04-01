@@ -18,6 +18,7 @@ model User {
   username         String    @unique
   email            String    @unique
   passwordHashed   String
+  role             String    @default("user")
   updated_at       DateTime  @updatedAt
   created_at       DateTime  @default(now())
   last_game_played DateTime?

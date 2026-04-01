@@ -60,6 +60,15 @@ export class AuthService {
                     username: email.split('@')[0],
                     passwordHashed,
                 },
+                select: {
+                    id: true,
+                    email: true,
+                    username: true,
+                    role: true,
+                    created_at: true,
+                    updated_at: true,
+                    last_game_played: true,
+                },
             });
             return user;
         } catch (error) {
@@ -80,7 +89,16 @@ export class AuthService {
             let user = await this.prisma.user.findFirst({
                 where: {
                     id: userId
-                }
+                },
+                select: {
+                    id: true,
+                    email: true,
+                    username: true,
+                    role: true,
+                    created_at: true,
+                    updated_at: true,
+                    last_game_played: true,
+                },
             });
             if (!user) {
                 let passwordHashed = '';
@@ -95,6 +113,15 @@ export class AuthService {
                         username: userRecord.email?.split('@')[0] || userId.substring(0, 8),
                         passwordHashed,
                     },
+                    select: {
+                        id: true,
+                        email: true,
+                        username: true,
+                        role: true,
+                        created_at: true,
+                        updated_at: true,
+                        last_game_played: true,
+                    },
                 });
             }
             return user;
@@ -105,7 +132,18 @@ export class AuthService {
 
     async getCurrentUser(userId: string): Promise<any> {
         try {
-            const user = await this.prisma.user.findUnique({ where: { id: userId } });
+            const user = await this.prisma.user.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    email: true,
+                    username: true,
+                    role: true,
+                    created_at: true,
+                    updated_at: true,
+                    last_game_played: true,
+                },
+            });
             if (!user) {
                 throw new Error('User not found');
             }
@@ -120,6 +158,15 @@ export class AuthService {
             const updatedUser = await this.prisma.user.update({
                 where: { id: userId },
                 data,
+                select: {
+                    id: true,
+                    email: true,
+                    username: true,
+                    role: true,
+                    created_at: true,
+                    updated_at: true,
+                    last_game_played: true,
+                },
             });
             return updatedUser;
         } catch (error) {

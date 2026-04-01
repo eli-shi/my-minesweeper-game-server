@@ -6,6 +6,7 @@ import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import gameRoutes from './routes/gameRoutes.js';
 import leaderboardRoutes from './routes/leaderboardRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 import { corsOptions } from './config/cors.js';
 import {
     generalLimiter,
@@ -26,6 +27,7 @@ app.use(generalLimiter);
 app.use('/auth', authLimiter, authRoutes);
 app.use('/games', gameActionLimiter, gameRoutes);
 app.use('/games/leaderboard', leaderboardLimiter, leaderboardRoutes);
+app.use('/admin', generalLimiter, adminRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
